@@ -1,1 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculadora de Peso - Sistema de Descarga</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background:#f4f6f9; display:flex; justify-content:center; align-items:center; min-height:100vh; padding:20px; }
+    .container { background:#fff; padding:30px; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.08); width:100%; max-width:440px; text-align:center; }
+    h2 { margin-bottom:20px; color:#1e293b; font-size:22px; font-weight:700; }
+    
+    .drop-zone { border:2px dashed #3b82f6; border-radius:10px; padding:20px; background:#eff6ff; cursor:pointer; margin-bottom:15px; transition:0.2s; }
+    .drop-zone:hover { background:#dbeafe; border-color:#2563eb; }
+    .drop-zone p { color:#1d4ed8; font-weight:600; font-size:14px; }
+    .drop-zone span { display:block; font-size:12px; color:#64748b; margin-top:4px; }
 
+    #fileInput { display:none; }
+
+    .form-group { margin-bottom:12px; text-align:left; }
+    label { display:block; margin-bottom:4px; font-weight:600; font-size:13px; color:#334155; }
+    .status-badge { font-size:11px; float:right; font-weight:600; }
+    .valid { color:#16a34a; }
+    .invalid-text { color:#dc2626; }
+
+    input { width:100%; padding:10px 14px; font-size:16px; border:1px solid #cbd5e1; border-radius:6px; text-align:center; transition:0.2s; color:#0f172a; font-weight:500; }
+    input:focus { border-color:#3b82f6; outline:none; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
+    input.invalid { border-color:#ef4444; background-color:#fef2f2; }
+
+    .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+    .resultado-card { margin:20px 0; background:#f0fdf4; padding:16px; border-radius:8px; border:1px solid #bbf7d0; text-align:center; }
+    .resultado-card label { text-align:center; color:#166534; font-size:13px; text-transform:uppercase; letter-spacing:0.5px; }
+    .resultado-card span { display:block; font-size:36px; color:#15803d; font-weight:800; margin-top:2px; }
+
+    button { width:100%; padding:12px; font-size:15px; border:none; border-radius:6px; font-weight:600; cursor:pointer; transition:0.2s; margin-bottom:8px; }
+    #copiarPeso { background:#2563eb; color:#fff; }
+    #copiarPeso:hover { background:#1d4ed8; }
+    #copiarCompleto { background:#16a34a; color:#fff; }
+    #copiarCompleto:hover { background:#15803d; }
+
+    #msg { height:20px; color:#16a34a; font-size:13px; font-weight:600; margin-top:5px; }
+    .loading { font-size:13px; color:#2563eb; font-weight:600; display:none; margin-bottom:12px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Calculadora de Peso OCR</h2>
+
+  <div class="drop-zone" id="dropZone" tabindex="0">
+    <p>📋 Cole o print (CTRL+V) em qualquer lugar</p>
+    <span>ou clique aqui para selecionar a imagem</span>
+    <input type="file" id="fileInput" accept="image/*">
+  </div>
+
+  <div id="loading" class="loading">⏳ Processando imagem...</div>
+
+  <div class="form-group">
+    <label for="lacres">LACRES</label>
+    <input id="lacres" placeholder="Ex: 314434 a 314441" autocomplete="off">
+  </div>
+
+  <div class="grid-2">
+    <div class="form-group">
+      <label for="tt">TT (Temp. Tq) <span id="status-tt" class="status-badge"></span></label>
+      <input id="tt" placeholder="0,0">
+    </div>
+    <div class="form-group">
+      <label for="ta">TA (Temp. Op) <span id="status-ta" class="status-badge"></span></label>
+      <input id="ta" placeholder="0,0">
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="form-group">
+      <label for="densidade">Densidade (D) <span id="status-densidade" class="status-badge"></span></label>
+      <input id="densidade" placeholder="0,XXXX">
+    </div>
+    <div class="form-group">
+      <label for="fc">Fator Conv (FC) <span id="status-fc" class="status-badge"></span></label>
+      <input id="fc" placeholder="0,99XX">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="volume">Volume 20c (Litros) <span id="status-volume" class="status-badge"></span></label>
+    <input id="volume" placeholder="00.000">
+  </div>
+
+  <div class="resultado-card">
+    <label>Peso Calculado</label>
+    <span id="resultado">0 kg</span>
+  </div>
+
+  <button id="copiarPeso">📋 Copiar Peso</button>
+  <button id="copiarCompleto">📋 Copiar Completo</button>
+  <div id="msg"></div>
+</div>
+
+<script>
+const fields = ["lacres", "tt", "ta", "densidade", "fc", "volume"];
+const els = {};
+fields.forEach(id => els[id] = document.getElementById(id));
+
+let pesoCalculado = 0;
+let isDataValid = false;
+
+window.addEventListener('paste', e => {
+  const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+  for (let item of items) {
+    if (item.type.indexOf('image') !== -1) {
+      processImageViaAI(item.getAsFile());
+      break;
+    }
+  }
+});
+
+document.getElementById('dropZone').onclick = () => els.fileInput.click();
+els.fileInput.onchange = e => processImageViaAI(e.target.files[0]);
+
+async function processImageViaAI(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+
+  document.getElementById('loading').style.display = 'block';
+
+  try {
+    const base64Compressed = await resizeImageToBase64(file, 1024);
+    const pureBase64 = base64Compressed.split(',')[1];
+
+    const response = await fetch('/api/process-ocr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64: pureBase64 })
+    });
+
+    const parsed = await response.json();
+
+    if (!response.ok) {
+      throw new Error(parsed.error || 'Erro no processamento da imagem');
+    }
+
+    els.tt.value = parsed.tt || '';
+    els.ta.value = parsed.ta || '';
+    els.densidade.value = parsed.densidade || '';
+    els.fc.value = parsed.fc || '';
+
+    if (parsed.volume) {
+      let volNum = parseInt(parsed.volume.toString().replace(/\D/g, ''), 10);
+      els.volume.value = !isNaN(volNum) ? volNum.toLocaleString('pt-BR') : '';
+    } else {
+      els.volume.value = '';
+    }
+
+    calcular();
+
+  } catch (err) {
+    console.error('Detalhes do Erro:', err);
+    alert(err.message || 'Erro ao processar imagem.');
+  } finally {
+    document.getElementById('loading').style.display = 'none';
+  }
+}
+
+function resizeImageToBase64(file, maxDimension) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = reject;
+    };
+    reader.onerror = reject;
+  });
+}
+
+function calcular() {
+  const volDigits = els.volume.value.replace(/\D/g, '');
+  const vol = Number(volDigits) || 0;
+  const dens = Number(els.densidade.value.replace(',', '.')) || 0;
+
+  pesoCalculado = Math.round(vol * dens);
+  document.getElementById('resultado').innerHTML = pesoCalculado.toLocaleString('pt-BR') + ' kg';
+
+  validarFormulario();
+}
+
+function validarFormulario() {
+  let valid = true;
+
+  const ttVal = parseFloat(els.tt.value.replace(',', '.'));
+  const ttValid = !isNaN(ttVal) && ttVal >= -10 && ttVal <= 70;
+  setFieldStatus('tt', ttValid);
+  if (!ttValid) valid = false;
+
+  const taVal = parseFloat(els.ta.value.replace(',', '.'));
+  const taValid = !isNaN(taVal) && taVal >= -10 && taVal <= 70;
+  setFieldStatus('ta', taValid);
+  if (!taValid) valid = false;
+
+  const dValid = /^0,\d{4}$/.test(els.densidade.value);
+  setFieldStatus('densidade', dValid);
+  if (!dValid) valid = false;
+
+  const fcValid = /^0,99\d{2}$/.test(els.fc.value);
+  setFieldStatus('fc', fcValid);
+  if (!fcValid) valid = false;
+
+  const volVal = parseInt(els.volume.value.replace(/\D/g, ''), 10);
+  const volValid = !isNaN(volVal) && volVal > 0;
+  setFieldStatus('volume', volValid);
+  if (!volValid) valid = false;
+
+  isDataValid = valid;
+}
+
+function setFieldStatus(field, isValid) {
+  const statusEl = document.getElementById(`status-${field}`);
+  if (isValid) {
+    els[field].classList.remove('invalid');
+    statusEl.innerHTML = '✓';
+    statusEl.className = 'status-badge valid';
+  } else {
+    els[field].classList.add('invalid');
+    statusEl.innerHTML = '⚠ Revisar';
+    statusEl.className = 'status-badge invalid-text';
+  }
+}
+
+els.volume.oninput = () => {
+  let digits = els.volume.value.replace(/\D/g, '');
+  els.volume.value = digits ? Number(digits).toLocaleString('pt-BR') : '';
+  calcular();
+};
+
+['tt', 'ta', 'densidade', 'fc'].forEach(id => els[id].addEventListener('input', calcular));
+
+function showMsg(text) {
+  const msgEl = document.getElementById('msg');
+  msgEl.innerHTML = '✓ ' + text;
+  setTimeout(() => msgEl.innerHTML = '', 1500);
+}
+
+document.getElementById('copiarPeso').onclick = () => {
+  if (!isDataValid) {
+    alert('Existem dados inválidos. Por favor revise antes de copiar.');
+    return;
+  }
+  navigator.clipboard.writeText(pesoCalculado.toLocaleString('pt-BR'));
+  showMsg('Peso copiado!');
+};
+
+document.getElementById('copiarCompleto').onclick = () => {
+  if (!isDataValid) {
+    alert('Existem dados inválidos. Por favor revise antes de copiar.');
+    return;
+  }
+
+  const pesoFmt = pesoCalculado.toLocaleString('pt-BR');
+  const textoFinal = `LACRES:${els.lacres.value} TT${els.tt.value} TA${els.ta.value} D${els.densidade.value} FC${els.fc.value} PESO:${pesoFmt}`;
+
+  navigator.clipboard.writeText(textoFinal);
+  showMsg('Dados copiados!');
+
+  fields.forEach(id => els[id].value = '');
+  calcular();
+  els.lacres.focus();
+};
+
+fields.forEach((id, index) => {
+  els[id].addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (index < fields.length - 1) {
+        els[fields[index + 1]].focus();
+      } else {
+        document.getElementById('copiarCompleto').click();
+      }
+    }
+  });
+});
+
+els.lacres.focus();
+</script>
+
+</body>
+</html>
