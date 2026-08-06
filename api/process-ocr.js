@@ -15,7 +15,8 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Chave GEMINI_API_KEY não configurada no painel da Vercel.' });
     }
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+   // Linha nova (corrigida):
+const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
     const payload = {
       contents: [{
