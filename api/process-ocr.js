@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     }
 
    // Linha nova (corrigida):
-const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent?key=${apiKey}`;
 
     const payload = {
       contents: [{
